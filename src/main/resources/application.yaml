@@ -26,8 +26,8 @@ server:
 camunda:
   client:
     mode: self-managed
-    grpc-address: ${CAMUNDA_GRPC_ADDRESS:http://localhost:26500}
-    rest-address: ${CAMUNDA_REST_ADDRESS:http://localhost:8080}
+    grpc-address: ${CAMUNDA_GRPC_ADDRESS:{CAMUNDA_GRPC_ADDRESS}}
+    rest-address: ${CAMUNDA_REST_ADDRESS:{CAMUNDA_REST_ADDRESS}}
     prefer-rest-over-grpc: false
 
 logging:
