@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" xmlns:dmndi="https://www.omg.org/spec/DMN/20191111/DMNDI/" xmlns:dc="http://www.omg.org/spec/DMN/20180521/DC/" xmlns:di="http://www.omg.org/spec/DMN/20180521/DI/" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_LoanRiskDecision" name="Loan Risk Decision" namespace="http://camunda.org/schema/1.0/dmn" exporter="Camunda Modeler" exporterVersion="5.30.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0">
+  <decision id="loan-risk-decision" name="Loan Risk Routing Decision">
+    <extensionElements />
+    <decisionTable id="DecisionTable_LoanRisk" hitPolicy="FIRST">
+      <input id="Input_RiskCategory" label="Risk Category">
+        <inputExpression id="InputExpression_RiskCategory" typeRef="string">
+          <text>riskCategory</text>
+        </inputExpression>
+        <inputValues id="InputValues_RiskCategory">
+          <text>"LOW","MEDIUM","HIGH"</text>
+        </inputValues>
+      </input>
+      <input id="Input_RequestedAmount" label="Requested Amount">
+        <inputExpression id="InputExpression_RequestedAmount" typeRef="number">
+          <text>requestedAmount</text>
+        </inputExpression>
+      </input>
+      <output id="Output_RoutingDecision" label="Routing Decision" name="routingDecision" typeRef="string">
+        <outputValues id="OutputValues_RoutingDecision">
+          <text>"AUTO_APPROVE","MANUAL_REVIEW","SENIOR_REVIEW","AUTO_REJECT"</text>
+        </outputValues>
+      </output>
+      <rule id="Rule_HighRiskRejected">
+        <inputEntry id="InputEntry_HighRiskRejected_1">
+          <text>"HIGH"</text>
+        </inputEntry>
+        <inputEntry id="InputEntry_HighRiskRejected_2">
+          <text></text>
+        </inputEntry>
+        <outputEntry id="OutputEntry_HighRiskRejected_1">
+          <text>"AUTO_REJECT"</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_LowRiskSmallAutoApprove">
+        <inputEntry id="InputEntry_LowRiskSmallAutoApprove_1">
+          <text>"LOW"</text>
+        </inputEntry>
+        <inputEntry id="InputEntry_LowRiskSmallAutoApprove_2">
+          <text>&lt;= 10000</text>
+        </inputEntry>
+        <outputEntry id="OutputEntry_LowRiskSmallAutoApprove_1">
+          <text>"AUTO_APPROVE"</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_LargeAmountSeniorReview">
+        <inputEntry id="InputEntry_LargeAmountSeniorReview_1">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="InputEntry_LargeAmountSeniorReview_2">
+          <text>&gt; 50000</text>
+        </inputEntry>
+        <outputEntry id="OutputEntry_LargeAmountSeniorReview_1">
+          <text>"SENIOR_REVIEW"</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_MediumRiskAboveThresholdSeniorReview">
+        <inputEntry id="InputEntry_MediumRiskAboveThresholdSeniorReview_1">
+          <text>"MEDIUM"</text>
+        </inputEntry>
+        <inputEntry id="InputEntry_MediumRiskAboveThresholdSeniorReview_2">
+          <text>&gt; 10000</text>
+        </inputEntry>
+        <outputEntry id="OutputEntry_MediumRiskAboveThresholdSeniorReview_1">
+          <text>"SENIOR_REVIEW"</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_DefaultManualReview">
+        <inputEntry id="InputEntry_DefaultManualReview_1">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="InputEntry_DefaultManualReview_2">
+          <text></text>
+        </inputEntry>
+        <outputEntry id="OutputEntry_DefaultManualReview_1">
+          <text>"MANUAL_REVIEW"</text>
+        </outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+  <dmndi:DMNDI>
+    <dmndi:DMNDiagram id="DMNDiagram_LoanRiskDecision">
+      <dmndi:DMNShape id="DMNShape_LoanRiskDecision" dmnElementRef="loan-risk-decision">
+        <dc:Bounds height="80" width="180" x="160" y="100" />
+      </dmndi:DMNShape>
+    </dmndi:DMNDiagram>
+  </dmndi:DMNDI>
+</definitions>

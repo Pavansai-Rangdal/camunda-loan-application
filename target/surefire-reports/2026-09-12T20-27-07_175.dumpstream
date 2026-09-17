@@ -1,0 +1,5 @@
+# Created at 2026-09-12T20:27:07.267
+Boot Manifest-JAR contains absolute paths in classpath 'U:\Camunda-Projects\Orkest_AI_main\orchest-AI\loan-approval\backend\target\test-classes'
+Hint: <argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true</argLine>
+'other' has different root
+

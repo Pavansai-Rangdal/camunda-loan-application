@@ -1,0 +1,50 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: loan-approval-backend
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+  datasource:
+    url: jdbc:postgresql://localhost:5432/loan_approval
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:mysql}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate        # Flyway owns the schema (db-design.md v1) - Hibernate only validates
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    table: flyway_loanapproval_schema_history   # CRITICAL - isolates this app's migration history (dev guide Flyway table isolation rule)
+    # baseline-on-migrate intentionally omitted (default false): this is a brand-new, greenfield
+    # database per db-design.md v1 section 6 - no baseline is needed.
+
+camunda:
+  client:
+    mode: self-managed          # MUST be kebab-case. "selfManaged" and "simple" don't exist.
+    grpc-address: http://localhost:26500
+    rest-address: http://localhost:8080
+    auth:
+      method: none              # required for C8 Run without Keycloak
+    enabled: true
+
+camunda-rest:
+  base-url: http://localhost:8080/v2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always

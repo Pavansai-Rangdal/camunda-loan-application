@@ -1,0 +1,450 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_LoanApprovalProcess" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.30.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0">
+  <bpmn:process id="loan-approval-process" name="Loan Approval Process" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_LoanApproval">
+      <bpmn:lane id="Lane_Applicant" name="Applicant">
+        <bpmn:flowNodeRef>StartEvent_LoanApplicationSubmitted</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_System" name="System / Automated">
+        <bpmn:flowNodeRef>Task_CheckCredit</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_DetermineRiskRouting</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_RoutingDecision</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_MergeDecision</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_RecordDecision</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_SendNotification</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_FinalOutcome</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_LoanApproved</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_LoanRejected</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_LoanOfficer" name="Loan Officer">
+        <bpmn:flowNodeRef>Task_LoanOfficerReview</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>BoundaryEvent_LoanOfficerReminder</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_SendOfficerReminder</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_OfficerReminderSent</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_SeniorReviewNeeded</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_SeniorManager" name="Senior Manager">
+        <bpmn:flowNodeRef>Task_SeniorManagerReview</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>BoundaryEvent_SeniorManagerReminder</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_SendManagerReminder</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_ManagerReminderSent</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <bpmn:startEvent id="StartEvent_LoanApplicationSubmitted" name="Loan application submitted">
+      <bpmn:outgoing>Flow_Start_CheckCredit</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="Task_CheckCredit" name="Check credit-worthiness">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="credit-check" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Start_CheckCredit</bpmn:incoming>
+      <bpmn:outgoing>Flow_CheckCredit_DetermineRouting</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:businessRuleTask id="Task_DetermineRiskRouting" name="Determine risk routing">
+      <bpmn:extensionElements>
+        <zeebe:calledDecision decisionId="loan-risk-decision" resultVariable="routingDecision" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_CheckCredit_DetermineRouting</bpmn:incoming>
+      <bpmn:outgoing>Flow_DetermineRouting_Gateway</bpmn:outgoing>
+    </bpmn:businessRuleTask>
+
+    <bpmn:exclusiveGateway id="Gateway_RoutingDecision" name="Routing decision?" default="Flow_Routing_ManualReview">
+      <bpmn:incoming>Flow_DetermineRouting_Gateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_Routing_AutoApprove</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Routing_AutoReject</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Routing_SeniorReview</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Routing_ManualReview</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="Task_LoanOfficerReview" name="Review loan application">
+      <bpmn:extensionElements>
+        <zeebe:userTask />
+        <zeebe:assignmentDefinition candidateGroups="loan-officers" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Routing_ManualReview</bpmn:incoming>
+      <bpmn:incoming>Flow_Routing_SeniorReview</bpmn:incoming>
+      <bpmn:outgoing>Flow_LoanOfficerReview_SeniorGateway</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:boundaryEvent id="BoundaryEvent_LoanOfficerReminder" name="Review stale reminder" cancelActivity="false" attachedToRef="Task_LoanOfficerReview">
+      <bpmn:outgoing>Flow_OfficerReminder_SendReminder</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="TimerDef_LoanOfficerReminder">
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">P2D</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+
+    <bpmn:serviceTask id="Task_SendOfficerReminder" name="Send loan officer reminder">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="send-notification" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=&quot;OFFICER_REVIEW_REMINDER&quot;" target="notificationType" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_OfficerReminder_SendReminder</bpmn:incoming>
+      <bpmn:outgoing>Flow_SendOfficerReminder_End</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_OfficerReminderSent" name="Officer reminder sent">
+      <bpmn:incoming>Flow_SendOfficerReminder_End</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:exclusiveGateway id="Gateway_SeniorReviewNeeded" name="Escalate to senior manager?" default="Flow_SeniorGateway_No">
+      <bpmn:incoming>Flow_LoanOfficerReview_SeniorGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_SeniorGateway_Yes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_SeniorGateway_No</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="Task_SeniorManagerReview" name="Provide second approval">
+      <bpmn:extensionElements>
+        <zeebe:userTask />
+        <zeebe:assignmentDefinition candidateGroups="senior-managers" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_SeniorGateway_Yes</bpmn:incoming>
+      <bpmn:outgoing>Flow_SeniorManagerReview_Merge</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:boundaryEvent id="BoundaryEvent_SeniorManagerReminder" name="Review stale reminder" cancelActivity="false" attachedToRef="Task_SeniorManagerReview">
+      <bpmn:outgoing>Flow_ManagerReminder_SendReminder</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="TimerDef_SeniorManagerReminder">
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">P2D</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+
+    <bpmn:serviceTask id="Task_SendManagerReminder" name="Send senior manager reminder">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="send-notification" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=&quot;SENIOR_MANAGER_REVIEW_REMINDER&quot;" target="notificationType" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ManagerReminder_SendReminder</bpmn:incoming>
+      <bpmn:outgoing>Flow_SendManagerReminder_End</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_ManagerReminderSent" name="Manager reminder sent">
+      <bpmn:incoming>Flow_SendManagerReminder_End</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:exclusiveGateway id="Gateway_MergeDecision">
+      <bpmn:incoming>Flow_Routing_AutoApprove</bpmn:incoming>
+      <bpmn:incoming>Flow_Routing_AutoReject</bpmn:incoming>
+      <bpmn:incoming>Flow_SeniorGateway_No</bpmn:incoming>
+      <bpmn:incoming>Flow_SeniorManagerReview_Merge</bpmn:incoming>
+      <bpmn:outgoing>Flow_Merge_RecordDecision</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="Task_RecordDecision" name="Record loan decision">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="record-decision" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Merge_RecordDecision</bpmn:incoming>
+      <bpmn:outgoing>Flow_RecordDecision_SendNotification</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_SendNotification" name="Notify applicant of outcome">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="send-notification" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=&quot;APPLICATION_OUTCOME&quot;" target="notificationType" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_RecordDecision_SendNotification</bpmn:incoming>
+      <bpmn:outgoing>Flow_SendNotification_FinalGateway</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="Gateway_FinalOutcome" name="Loan approved?" default="Flow_Final_Rejected">
+      <bpmn:incoming>Flow_SendNotification_FinalGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_Final_Approved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Final_Rejected</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:endEvent id="EndEvent_LoanApproved" name="Loan approved">
+      <bpmn:incoming>Flow_Final_Approved</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:endEvent id="EndEvent_LoanRejected" name="Loan rejected">
+      <bpmn:incoming>Flow_Final_Rejected</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_Start_CheckCredit" sourceRef="StartEvent_LoanApplicationSubmitted" targetRef="Task_CheckCredit" />
+    <bpmn:sequenceFlow id="Flow_CheckCredit_DetermineRouting" sourceRef="Task_CheckCredit" targetRef="Task_DetermineRiskRouting" />
+    <bpmn:sequenceFlow id="Flow_DetermineRouting_Gateway" sourceRef="Task_DetermineRiskRouting" targetRef="Gateway_RoutingDecision" />
+
+    <bpmn:sequenceFlow id="Flow_Routing_AutoApprove" name="Auto-approve" sourceRef="Gateway_RoutingDecision" targetRef="Gateway_MergeDecision">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=routingDecision = "AUTO_APPROVE"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Routing_AutoReject" name="Auto-reject" sourceRef="Gateway_RoutingDecision" targetRef="Gateway_MergeDecision">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=routingDecision = "AUTO_REJECT"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Routing_SeniorReview" name="Senior review" sourceRef="Gateway_RoutingDecision" targetRef="Task_LoanOfficerReview">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=routingDecision = "SENIOR_REVIEW"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Routing_ManualReview" name="Manual review" sourceRef="Gateway_RoutingDecision" targetRef="Task_LoanOfficerReview" />
+
+    <bpmn:sequenceFlow id="Flow_LoanOfficerReview_SeniorGateway" sourceRef="Task_LoanOfficerReview" targetRef="Gateway_SeniorReviewNeeded" />
+
+    <bpmn:sequenceFlow id="Flow_SeniorGateway_Yes" name="Yes" sourceRef="Gateway_SeniorReviewNeeded" targetRef="Task_SeniorManagerReview">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=routingDecision = "SENIOR_REVIEW" or escalateToSeniorManager = true or requestedAmount > 75000</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_SeniorGateway_No" name="No" sourceRef="Gateway_SeniorReviewNeeded" targetRef="Gateway_MergeDecision" />
+
+    <bpmn:sequenceFlow id="Flow_SeniorManagerReview_Merge" sourceRef="Task_SeniorManagerReview" targetRef="Gateway_MergeDecision" />
+
+    <bpmn:sequenceFlow id="Flow_Merge_RecordDecision" sourceRef="Gateway_MergeDecision" targetRef="Task_RecordDecision" />
+    <bpmn:sequenceFlow id="Flow_RecordDecision_SendNotification" sourceRef="Task_RecordDecision" targetRef="Task_SendNotification" />
+    <bpmn:sequenceFlow id="Flow_SendNotification_FinalGateway" sourceRef="Task_SendNotification" targetRef="Gateway_FinalOutcome" />
+
+    <bpmn:sequenceFlow id="Flow_Final_Approved" name="Yes" sourceRef="Gateway_FinalOutcome" targetRef="EndEvent_LoanApproved">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=finalStatus = "APPROVED"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Final_Rejected" name="No" sourceRef="Gateway_FinalOutcome" targetRef="EndEvent_LoanRejected" />
+
+    <bpmn:sequenceFlow id="Flow_OfficerReminder_SendReminder" sourceRef="BoundaryEvent_LoanOfficerReminder" targetRef="Task_SendOfficerReminder" />
+    <bpmn:sequenceFlow id="Flow_SendOfficerReminder_End" sourceRef="Task_SendOfficerReminder" targetRef="EndEvent_OfficerReminderSent" />
+
+    <bpmn:sequenceFlow id="Flow_ManagerReminder_SendReminder" sourceRef="BoundaryEvent_SeniorManagerReminder" targetRef="Task_SendManagerReminder" />
+    <bpmn:sequenceFlow id="Flow_SendManagerReminder_End" sourceRef="Task_SendManagerReminder" targetRef="EndEvent_ManagerReminderSent" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_LoanApproval">
+    <bpmndi:BPMNPlane id="BPMNPlane_LoanApproval" bpmnElement="loan-approval-process">
+
+      <bpmndi:BPMNShape id="Lane_Applicant_di" bpmnElement="Lane_Applicant" isHorizontal="true">
+        <dc:Bounds x="0" y="40" width="1850" height="180" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_System_di" bpmnElement="Lane_System" isHorizontal="true">
+        <dc:Bounds x="0" y="220" width="1850" height="180" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_LoanOfficer_di" bpmnElement="Lane_LoanOfficer" isHorizontal="true">
+        <dc:Bounds x="0" y="400" width="1850" height="240" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_SeniorManager_di" bpmnElement="Lane_SeniorManager" isHorizontal="true">
+        <dc:Bounds x="0" y="640" width="1850" height="260" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="StartEvent_LoanApplicationSubmitted_di" bpmnElement="StartEvent_LoanApplicationSubmitted">
+        <dc:Bounds x="100" y="112" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="70" y="148" width="96" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Task_CheckCredit_di" bpmnElement="Task_CheckCredit">
+        <dc:Bounds x="220" y="270" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Task_DetermineRiskRouting_di" bpmnElement="Task_DetermineRiskRouting">
+        <dc:Bounds x="380" y="270" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Gateway_RoutingDecision_di" bpmnElement="Gateway_RoutingDecision" isMarkerVisible="true">
+        <dc:Bounds x="560" y="285" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="535" y="335" width="100" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Task_LoanOfficerReview_di" bpmnElement="Task_LoanOfficerReview">
+        <dc:Bounds x="700" y="480" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="BoundaryEvent_LoanOfficerReminder_di" bpmnElement="BoundaryEvent_LoanOfficerReminder">
+        <dc:Bounds x="732" y="542" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="700" y="578" width="100" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Task_SendOfficerReminder_di" bpmnElement="Task_SendOfficerReminder">
+        <dc:Bounds x="732" y="580" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="EndEvent_OfficerReminderSent_di" bpmnElement="EndEvent_OfficerReminderSent">
+        <dc:Bounds x="890" y="602" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="865" y="638" width="86" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Gateway_SeniorReviewNeeded_di" bpmnElement="Gateway_SeniorReviewNeeded" isMarkerVisible="true">
+        <dc:Bounds x="860" y="495" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="825" y="452" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Task_SeniorManagerReview_di" bpmnElement="Task_SeniorManagerReview">
+        <dc:Bounds x="1000" y="720" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="BoundaryEvent_SeniorManagerReminder_di" bpmnElement="BoundaryEvent_SeniorManagerReminder">
+        <dc:Bounds x="1032" y="782" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1000" y="818" width="100" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Task_SendManagerReminder_di" bpmnElement="Task_SendManagerReminder">
+        <dc:Bounds x="1032" y="820" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="EndEvent_ManagerReminderSent_di" bpmnElement="EndEvent_ManagerReminderSent">
+        <dc:Bounds x="1190" y="842" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1165" y="878" width="86" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Gateway_MergeDecision_di" bpmnElement="Gateway_MergeDecision" isMarkerVisible="true">
+        <dc:Bounds x="1160" y="285" width="50" height="50" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Task_RecordDecision_di" bpmnElement="Task_RecordDecision">
+        <dc:Bounds x="1260" y="270" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Task_SendNotification_di" bpmnElement="Task_SendNotification">
+        <dc:Bounds x="1420" y="270" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Gateway_FinalOutcome_di" bpmnElement="Gateway_FinalOutcome" isMarkerVisible="true">
+        <dc:Bounds x="1580" y="285" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1555" y="335" width="100" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="EndEvent_LoanApproved_di" bpmnElement="EndEvent_LoanApproved">
+        <dc:Bounds x="1700" y="232" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1675" y="268" width="86" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="EndEvent_LoanRejected_di" bpmnElement="EndEvent_LoanRejected">
+        <dc:Bounds x="1700" y="332" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1675" y="368" width="86" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="Flow_Start_CheckCredit_di" bpmnElement="Flow_Start_CheckCredit">
+        <di:waypoint x="136" y="130" />
+        <di:waypoint x="136" y="310" />
+        <di:waypoint x="220" y="310" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_CheckCredit_DetermineRouting_di" bpmnElement="Flow_CheckCredit_DetermineRouting">
+        <di:waypoint x="320" y="310" />
+        <di:waypoint x="380" y="310" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_DetermineRouting_Gateway_di" bpmnElement="Flow_DetermineRouting_Gateway">
+        <di:waypoint x="480" y="310" />
+        <di:waypoint x="560" y="310" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_Routing_AutoApprove_di" bpmnElement="Flow_Routing_AutoApprove">
+        <di:waypoint x="585" y="285" />
+        <di:waypoint x="585" y="180" />
+        <di:waypoint x="1185" y="180" />
+        <di:waypoint x="1185" y="285" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_Routing_AutoReject_di" bpmnElement="Flow_Routing_AutoReject">
+        <di:waypoint x="610" y="320" />
+        <di:waypoint x="1160" y="320" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_Routing_SeniorReview_di" bpmnElement="Flow_Routing_SeniorReview">
+        <di:waypoint x="610" y="300" />
+        <di:waypoint x="650" y="300" />
+        <di:waypoint x="650" y="480" />
+        <di:waypoint x="750" y="480" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_Routing_ManualReview_di" bpmnElement="Flow_Routing_ManualReview">
+        <di:waypoint x="585" y="335" />
+        <di:waypoint x="585" y="520" />
+        <di:waypoint x="700" y="520" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_LoanOfficerReview_SeniorGateway_di" bpmnElement="Flow_LoanOfficerReview_SeniorGateway">
+        <di:waypoint x="800" y="520" />
+        <di:waypoint x="860" y="520" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_SeniorGateway_Yes_di" bpmnElement="Flow_SeniorGateway_Yes">
+        <di:waypoint x="885" y="545" />
+        <di:waypoint x="885" y="760" />
+        <di:waypoint x="1000" y="760" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_SeniorGateway_No_di" bpmnElement="Flow_SeniorGateway_No">
+        <di:waypoint x="885" y="495" />
+        <di:waypoint x="885" y="150" />
+        <di:waypoint x="1185" y="150" />
+        <di:waypoint x="1185" y="285" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_SeniorManagerReview_Merge_di" bpmnElement="Flow_SeniorManagerReview_Merge">
+        <di:waypoint x="1100" y="760" />
+        <di:waypoint x="1185" y="760" />
+        <di:waypoint x="1185" y="335" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_Merge_RecordDecision_di" bpmnElement="Flow_Merge_RecordDecision">
+        <di:waypoint x="1210" y="310" />
+        <di:waypoint x="1260" y="310" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_RecordDecision_SendNotification_di" bpmnElement="Flow_RecordDecision_SendNotification">
+        <di:waypoint x="1360" y="310" />
+        <di:waypoint x="1420" y="310" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_SendNotification_FinalGateway_di" bpmnElement="Flow_SendNotification_FinalGateway">
+        <di:waypoint x="1520" y="310" />
+        <di:waypoint x="1580" y="310" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_Final_Approved_di" bpmnElement="Flow_Final_Approved">
+        <di:waypoint x="1605" y="290" />
+        <di:waypoint x="1605" y="250" />
+        <di:waypoint x="1700" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_Final_Rejected_di" bpmnElement="Flow_Final_Rejected">
+        <di:waypoint x="1605" y="330" />
+        <di:waypoint x="1605" y="350" />
+        <di:waypoint x="1700" y="350" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_OfficerReminder_SendReminder_di" bpmnElement="Flow_OfficerReminder_SendReminder">
+        <di:waypoint x="750" y="578" />
+        <di:waypoint x="750" y="600" />
+        <di:waypoint x="732" y="600" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_SendOfficerReminder_End_di" bpmnElement="Flow_SendOfficerReminder_End">
+        <di:waypoint x="832" y="620" />
+        <di:waypoint x="890" y="620" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ManagerReminder_SendReminder_di" bpmnElement="Flow_ManagerReminder_SendReminder">
+        <di:waypoint x="1050" y="818" />
+        <di:waypoint x="1050" y="840" />
+        <di:waypoint x="1032" y="840" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_SendManagerReminder_End_di" bpmnElement="Flow_SendManagerReminder_End">
+        <di:waypoint x="1132" y="860" />
+        <di:waypoint x="1190" y="860" />
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
