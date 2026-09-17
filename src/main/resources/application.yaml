@@ -3,9 +3,9 @@ spring:
     name: loan-approval-backend
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME:postgres}?sslmode=${DB_SSL_MODE:require}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD}
+    url: jdbc:postgresql://${DATABASE_HOST}:${DATABASE_PORT:5432}/${DATABASE_NAME:postgres}?sslmode=${DB_SSL_MODE:require}
+    username: ${DATABASE_USER:postgres}
+    password: ${DATABASE_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
